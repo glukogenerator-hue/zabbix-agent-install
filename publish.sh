@@ -140,20 +140,20 @@ check_tls() {
   local host="${BASE_URL#https://}"; host="${host%%/*}"
   local port=443; [[ "$host" == *:* ]] && { port="${host##*:}"; host="${host%:*}"; }
   local tok; tok="$(awk '$1=="-"{print $2}' "$LINKS")"
-  if curl -fsS -o /dev/null "$BASE_URL/$SUBDIR/$tok" 2>/dev/null; then
+  if curl -fsS --max-time 15 -o /dev/null "$BASE_URL/$SUBDIR/$tok" 2>/dev/null; then
     log "Ссылка открывается по HTTPS"
   else
     warn "curl не смог скачать $BASE_URL/$SUBDIR/$tok — проверь веб-сервер/сертификат"
   fi
   local n
-  n="$(openssl s_client -connect "$host:$port" -servername "$host" -showcerts </dev/null 2>/dev/null | grep -c 'BEGIN CERTIFICATE' || true)"
+  n="$(timeout 15 openssl s_client -connect "$host:$port" -servername "$host" -showcerts </dev/null 2>/dev/null | grep -c 'BEGIN CERTIFICATE' || true)"
   if [[ "${n:-0}" -le 1 ]]; then
     warn "Сервер отдаёт только свой сертификат без промежуточных — curl на Linux его не проверит."
     warn "Нужно указать полную цепочку (fullchain) в конфиге веб-сервера. Текущие настройки Apache:"
     grep -RhsE '^\s*SSLCertificate(Chain)?File' /etc/apache2/sites-enabled/ 2>/dev/null | sed 's/^/      /' >&2 || true
   elif [[ -r /etc/ssl/certs/ISRG_Root_X1.pem ]] \
-       && openssl s_client -connect "$host:$port" -servername "$host" </dev/null 2>/dev/null | grep -q "O = Let's Encrypt" \
-       && ! openssl s_client -connect "$host:$port" -servername "$host" \
+       && timeout 15 openssl s_client -connect "$host:$port" -servername "$host" </dev/null 2>/dev/null | grep -q "O = Let's Encrypt" \
+       && ! timeout 15 openssl s_client -connect "$host:$port" -servername "$host" \
         -CAfile /etc/ssl/certs/ISRG_Root_X1.pem -verify_return_error </dev/null >/dev/null 2>&1; then
     warn "Цепочка не сходится к ISRG Root X1 — на старых Debian (10/11) curl может не проверить сертификат."
   else

@@ -141,12 +141,13 @@ fix_buster_sources() {
 
 apt_update() {
   if ! apt-get update -q; then
-    if [[ "$DEB_VER" == "10" ]]; then
+    if [[ "$DEB_VER" == "10" ]] && ! grep -rqs 'archive\.debian\.org' /etc/apt/sources.list /etc/apt/sources.list.d/; then
       fix_buster_sources
-      apt-get update -q || die "apt-get update не прошёл даже с archive.debian.org — проверь /etc/apt/sources.list"
-    else
-      die "apt-get update завершился с ошибкой — проверь репозитории"
+      apt-get update -q && return 0
     fi
+    # чужой битый репозиторий не должен валить установку — если нужных пакетов
+    # в итоге не окажется, упадём ниже на apt-get install
+    warn "apt-get update завершился с ошибками (см. выше) — продолжаю"
   fi
 }
 
