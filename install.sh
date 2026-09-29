@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  Установка Zabbix-агента на Debian 10/11/12/13 с авторегистрацией в Zabbix
+#  Установка Zabbix-агента на Debian 10–13 и Ubuntu 18.04–26.04 с авторегистрацией в Zabbix
 #  (Zabbix 7.4, zabbix-agent2, активные проверки, шифрование PSK).
 #
 #  Одной командой (от root):
@@ -58,7 +58,7 @@ resolve_cfg() {
 
 usage() {
   cat <<'EOF'
-Установка Zabbix-агента (Debian 10-13) с авторегистрацией.
+Установка Zabbix-агента (Debian 10-13, Ubuntu 18.04-26.04) с авторегистрацией.
 
   install.sh [-k PSK] [-s SERVER] [-n NAME] [-m "TEXT"] [-1]
 
@@ -93,18 +93,27 @@ if [[ -z "$PSK_KEY" ]]; then
 fi
 [[ "$PSK_KEY" =~ ^[0-9a-fA-F]{32,512}$ ]] || die "PSK должен быть hex-строкой (32+ символа)"
 resolve_cfg || true   # если openssl ещё нет — расшифруем после его установки
-[[ -r /etc/os-release ]] || die "Нет /etc/os-release — это точно Debian?"
+[[ -r /etc/os-release ]] || die "Нет /etc/os-release — это точно Debian/Ubuntu?"
 # shellcheck disable=SC1091
 . /etc/os-release
-[[ "${ID:-}" == "debian" ]] || die "Поддерживается только Debian (найдено: ${ID:-?})"
-DEB_VER="${VERSION_ID%%.*}"
-DEB_CODENAME="${VERSION_CODENAME:-}"
-case "$DEB_VER" in
-  10|11|12|13) ;;
-  *) die "Поддерживаются Debian 10–13 (найдено: ${VERSION_ID:-?})" ;;
+OS_ID="${ID:-}"; OS_CODENAME="${VERSION_CODENAME:-}"
+DEB_VER=""   # только для Debian (нужен для обхода EOL Debian 10)
+case "$OS_ID" in
+  debian)
+    OS_VER="${VERSION_ID%%.*}"; DEB_VER="$OS_VER"
+    case "$OS_VER" in
+      10|11|12|13) ;;
+      *) die "Поддерживаются Debian 10–13 (найдено: ${VERSION_ID:-?})" ;;
+    esac ;;
+  ubuntu)
+    OS_VER="${VERSION_ID:-}"
+    [[ "$OS_VER" =~ ^([0-9]{2})\.(04|10)$ && ${BASH_REMATCH[1]} -ge 18 ]] \
+      || die "Поддерживается Ubuntu 18.04 и новее (найдено: ${VERSION_ID:-?})" ;;
+  *) die "Поддерживаются Debian и Ubuntu (найдено: ${ID:-?})" ;;
 esac
+OS_NAME="${OS_ID^} ${OS_VER}"
 ARCH="$(dpkg --print-architecture)"
-log "Debian ${DEB_VER} (${DEB_CODENAME:-?}), архитектура ${ARCH}"
+log "${OS_NAME} (${OS_CODENAME:-?}), архитектура ${ARCH}"
 
 export DEBIAN_FRONTEND=noninteractive
 APT_OPTS=(-y -q -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold)
@@ -169,15 +178,19 @@ fetch() {  # fetch URL FILE
 # --- Репозиторий Zabbix ----------------------------------------------------------
 # Какие архитектуры есть в repo.zabbix.com для 7.4
 repo_supported() {
-  case "${DEB_VER}:${ARCH}" in
-    10:amd64|10:i386|11:amd64|12:amd64|12:arm64|12:i386|13:amd64|13:arm64) return 0 ;;
+  case "${OS_ID}${OS_VER}:${ARCH}" in
+    debian10:amd64|debian10:i386|debian11:amd64|debian12:amd64|debian12:arm64|debian12:i386) return 0 ;;
+    debian13:amd64|debian13:arm64) return 0 ;;
+    ubuntu18.04:amd64|ubuntu18.04:i386) return 0 ;;
+    ubuntu20.04:amd64|ubuntu20.04:arm64|ubuntu22.04:amd64|ubuntu22.04:arm64) return 0 ;;
+    ubuntu24.04:amd64|ubuntu24.04:arm64|ubuntu24.04:ppc64el|ubuntu26.04:amd64|ubuntu26.04:arm64) return 0 ;;
     *) return 1 ;;
   esac
 }
 
 if repo_supported; then
-  REL_DEB="zabbix-release_latest_${ZBX_VERSION}+debian${DEB_VER}_all.deb"
-  REL_URL="https://repo.zabbix.com/zabbix/${ZBX_VERSION}/release/debian/pool/main/z/zabbix-release/${REL_DEB}"
+  REL_DEB="zabbix-release_latest_${ZBX_VERSION}+${OS_ID}${OS_VER}_all.deb"
+  REL_URL="https://repo.zabbix.com/zabbix/${ZBX_VERSION}/release/${OS_ID}/pool/main/z/zabbix-release/${REL_DEB}"
   TMP_DEB="$(mktemp --suffix=.deb)"
   log "Подключаю репозиторий Zabbix ${ZBX_VERSION}"
   fetch "$REL_URL" "$TMP_DEB" || die "Не удалось скачать $REL_URL"
@@ -185,7 +198,7 @@ if repo_supported; then
   rm -f "$TMP_DEB"
   apt_update
 else
-  warn "Для Debian ${DEB_VER}/${ARCH} нет пакетов в repo.zabbix.com — ставлю агент из репозитория Debian"
+  warn "Для ${OS_NAME}/${ARCH} нет пакетов в repo.zabbix.com — ставлю агент из репозитория дистрибутива"
 fi
 
 # --- Выбор агента ----------------------------------------------------------------
@@ -221,7 +234,7 @@ fi
 HOST_NAME="$(printf '%s' "$HOST_NAME" | tr -c 'A-Za-z0-9._ -' '_' | cut -c1-128)"
 [[ -n "$HOST_NAME" ]] || die "Не удалось определить имя хоста — укажи его ключом -n"
 
-META="${META_TAG} debian${DEB_VER} ${ARCH}${EXTRA_META:+ ${EXTRA_META}}"
+META="${META_TAG} ${OS_ID}${OS_VER} ${ARCH}${EXTRA_META:+ ${EXTRA_META}}"
 META="${META:0:255}"
 
 # --- PSK -------------------------------------------------------------------------

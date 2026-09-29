@@ -1,6 +1,6 @@
 # zabbix-agent-install
 
-Установка Zabbix-агента на **Debian 10 / 11 / 12 / 13** одной командой, с автоматической регистрацией хоста в Zabbix.
+Установка Zabbix-агента на **Debian 10 / 11 / 12 / 13** и **Ubuntu 18.04 / 20.04 / 22.04 / 24.04 / 26.04** одной командой, с автоматической регистрацией хоста в Zabbix.
 
 - репозиторий Zabbix 7.4, `zabbix-agent2` (или классический `zabbix-agent` с ключом `-1`);
 - только активные проверки — входящий порт 10050 открывать не нужно, агенту нужен лишь исходящий доступ к серверу на 10051;
@@ -90,7 +90,7 @@ printf '%s' 'zabbix.example.com;my-identity' \
 Server=<SERVER>
 ServerActive=<SERVER>
 Hostname=<NAME>
-HostMetadata=linux-agent debian<N> <arch> [TEXT]
+HostMetadata=linux-agent <debianN|ubuntuXX.YY> <arch> [TEXT]
 TLSConnect=psk
 TLSAccept=psk
 TLSPSKIdentity=<identity>
