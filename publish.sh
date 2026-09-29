@@ -152,7 +152,7 @@ check_tls() {
     warn "Нужно указать полную цепочку (fullchain) в конфиге веб-сервера. Текущие настройки Apache:"
     grep -RhsE '^\s*SSLCertificate(Chain)?File' /etc/apache2/sites-enabled/ 2>/dev/null | sed 's/^/      /' >&2 || true
   elif [[ -r /etc/ssl/certs/ISRG_Root_X1.pem ]] \
-       && timeout 15 openssl s_client -connect "$host:$port" -servername "$host" </dev/null 2>/dev/null | grep -q "O = Let's Encrypt" \
+       && [[ "$(timeout 15 openssl s_client -connect "$host:$port" -servername "$host" </dev/null 2>/dev/null || true)" == *"O = Let's Encrypt"* ]] \
        && ! timeout 15 openssl s_client -connect "$host:$port" -servername "$host" \
         -CAfile /etc/ssl/certs/ISRG_Root_X1.pem -verify_return_error </dev/null >/dev/null 2>&1; then
     warn "Цепочка не сходится к ISRG Root X1 — на старых Debian (10/11) curl может не проверить сертификат."

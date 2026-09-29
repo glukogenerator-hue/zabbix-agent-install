@@ -189,7 +189,8 @@ else
 fi
 
 # --- Выбор агента ----------------------------------------------------------------
-has_candidate() { apt-cache policy "$1" 2>/dev/null | grep -q 'Candidate: [0-9]'; }
+# (без | grep -q: при pipefail ранний выход grep даёт SIGPIPE и ложный отказ)
+has_candidate() { local p; p="$(apt-cache policy "$1" 2>/dev/null)" || true; [[ "$p" =~ Candidate:\ [0-9] ]]; }
 
 if [[ $FORCE_AGENT1 -eq 0 ]] && has_candidate zabbix-agent2; then
   PKG="zabbix-agent2"; SVC="zabbix-agent2"; CONF="/etc/zabbix/zabbix_agent2.conf"
@@ -206,7 +207,7 @@ apt-get install "${APT_OPTS[@]}" --no-install-recommends "$PKG"
 [[ -f "$CONF" ]] || die "Не найден конфиг $CONF"
 
 # второй агент (если стоял) занимает порт 10050 — отключаем
-if systemctl list-unit-files "${OTHER_SVC}.service" 2>/dev/null | grep -q "^${OTHER_SVC}.service"; then
+if [[ "$(systemctl list-unit-files "${OTHER_SVC}.service" 2>/dev/null || true)" == *"${OTHER_SVC}.service"* ]]; then
   warn "Отключаю ${OTHER_SVC} (конфликтует с ${SVC} по порту 10050)"
   systemctl disable --now "$OTHER_SVC" >/dev/null 2>&1 || true
 fi
