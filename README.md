@@ -8,7 +8,30 @@
 - на Debian 10 при необходимости переключает apt на `archive.debian.org`;
 - можно запускать повторно — просто обновит настройки.
 
-## Запуск
+## Самый простой способ — секретные ссылки
+
+На своём веб-сервере с HTTPS один раз запускается `publish.sh` — он кладёт в `/i/` копии
+установщика с уже вшитым PSK, по одной на клиента:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/glukogenerator-hue/zabbix-agent-install/main/publish.sh \
+  | sudo PSK_KEY=<PSK> bash -s -- -u https://zbx.example.com aniks 3df sv
+```
+
+Он выведет ссылки вида `https://zbx.example.com/i/aniks-k3j9x0q2zp`. На хосте:
+
+```bash
+curl -fsSL https://zbx.example.com/i/aniks-k3j9x0q2zp | sudo bash
+```
+
+— ничего вводить не нужно, хост получает метку `client=aniks` и попадает в группу клиента.
+
+- `publish.sh` без аргументов — пересобрать скрипты из свежего `install.sh`;
+- `publish.sh aniks` — добавить клиента; `-r aniks` — перевыпустить ссылку; `-d aniks` — удалить; `-l` — список;
+- ссылки хранятся в `/etc/zbx-install/links`, PSK — в `/etc/zbx-install/psk` (только root);
+- ссылка = пароль: в ней PSK. Утекла — `publish.sh -r <клиент>`.
+
+## Запуск напрямую с GitHub
 
 От root:
 
@@ -35,7 +58,7 @@ curl -fsSL https://raw.githubusercontent.com/glukogenerator-hue/zabbix-agent-ins
 | `-k PSK` | PSK авторегистрации (hex) | переменная `PSK_KEY` или запрос |
 | `-s SERVER` | адрес сервера или прокси (`host` или `host:port`) | из зашифрованного конфига |
 | `-n NAME` | имя хоста в Zabbix | `hostname -f` |
-| `-m "TEXT"` | дополнительный текст в HostMetadata, напр. `client=acme` | — |
+| `-m "TEXT"` | дополнительный текст в HostMetadata (дописывается к метке клиента), напр. `role=db` | — |
 | `-1` | ставить `zabbix-agent` вместо `zabbix-agent2` | — |
 | `-h` | справка | — |
 

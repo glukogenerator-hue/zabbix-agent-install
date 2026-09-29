@@ -79,7 +79,7 @@ while getopts "k:s:n:m:1h" opt; do
     k) PSK_KEY="$OPTARG" ;;
     s) ZBX_SERVER="$OPTARG" ;;
     n) HOST_NAME="$OPTARG" ;;
-    m) EXTRA_META="$OPTARG" ;;
+    m) EXTRA_META="${EXTRA_META:+$EXTRA_META }$OPTARG" ;;
     1) FORCE_AGENT1=1 ;;
     h|*) usage ;;
   esac
